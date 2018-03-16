@@ -74,7 +74,7 @@ func main() {
 	fmt.Printf("S1:\n" + S1.Dump())
 	fmt.Printf("S2:\n" + S2.Dump())
 	fmt.Printf("S3:\n" + S3.Dump())
-	fmt.Println("------------wait for new value and for 2 everywhere---")
+	fmt.Println("------------wait for new valJe peux te debrief Lundi si tu veux.ue and for 2 everywhere---")
 	kp := engine.KeyIDPair{Key: "eric", ID: M2.ID()}
 	fcheck := func(i engine.Item) bool {
 		if i == nil {
