@@ -56,18 +56,10 @@ func (m *Member) GetData(kps engine.KeyIDPairs) engine.Items {
 	return items
 }
 func (m *Member) Delete(kps engine.KeyIDPairs) {
-	keys := ""
-	for _, kp := range kps {
-		m.store.Delete(kp)
-		keys += string(kp.ID) + "/" + string(kp.Key) + "  "
-	}
+	m.store.MultiDelete(kps)
 }
 func (m *Member) Put(items engine.Items) {
-	keys := ""
-	for _, i := range items {
-		m.store.Set(i)
-		keys += string(i.OwnedBy()) + "/" + string(i.GetKey()) + "  "
-	}
+	m.store.MultiSet(items)
 }
 
 func (m *Member) Write(item *Item) {

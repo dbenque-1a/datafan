@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -256,8 +255,6 @@ func (e *Engine) CheckAndGetUpdates(indexMap IndexMap) {
 			e.connector.RequestKeysChan() <- DataRequest{KeyIDPairs: toFetch, RequestDestination: indexMap.Source, RequestSource: e.local.ID()}
 		}
 		if len(toDelete) > 0 {
-			fmt.Printf("[%v] DELETE count %d from %v\n", e.local.ID(), len(toDelete), id)
-
 			e.local.Delete(toDelete)
 		}
 	}

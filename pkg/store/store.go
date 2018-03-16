@@ -7,5 +7,7 @@ type Store interface {
 	GetIndex(id engine.ID) engine.Index
 	Delete(engine.KeyIDPair)
 	Set(engine.Item)
+	MultiSet(engine.Items)
+	MultiDelete(engine.KeyIDPairs)
 	Get(engine.KeyIDPair) engine.Item
 }

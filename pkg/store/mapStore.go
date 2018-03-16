@@ -49,6 +49,19 @@ func (m *MapStore) GetIndex(id engine.ID) engine.Index {
 	}
 	return index
 }
+func (m *MapStore) MultiDelete(kps engine.KeyIDPairs) {
+	m.Lock()
+	defer m.Unlock()
+	if m.panicOnDelete {
+		panic(fmt.Sprintf("we said no delete even multi"))
+	}
+
+	for _, kp := range kps {
+		if m, ok := m.internal[kp.ID]; ok {
+			delete(m, kp.Key)
+		}
+	}
+}
 func (m *MapStore) Delete(kp engine.KeyIDPair) {
 	m.Lock()
 	defer m.Unlock()
@@ -59,6 +72,21 @@ func (m *MapStore) Delete(kp engine.KeyIDPair) {
 		delete(m, kp.Key)
 	}
 }
+func (m *MapStore) MultiSet(ilist engine.Items) {
+	m.Lock()
+	defer m.Unlock()
+	for _, i := range ilist {
+
+		id := i.OwnedBy()
+		s, ok := m.internal[id]
+		if !ok {
+			s = map[engine.Key]engine.Item{}
+			m.internal[id] = s
+		}
+		s[i.GetKey()] = i.DeepCopy()
+	}
+}
+
 func (m *MapStore) Set(i engine.Item) {
 	m.Lock()
 	defer m.Unlock()
