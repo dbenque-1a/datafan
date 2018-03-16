@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dbenque/datafan/pkg/engine"
@@ -18,9 +19,12 @@ func main() {
 	M2 := simple.NewMember("M2", S2)
 	M3 := simple.NewMember("M3", S3)
 
-	E1 := engine.NewEngine(M1, time.Second)
-	E2 := engine.NewEngine(M2, time.Second)
-	E3 := engine.NewEngine(M3, time.Second)
+	syncPeriod := 20 * time.Millisecond
+	checkPeriod := 10 * time.Millisecond
+
+	E1 := engine.NewEngine(M1, syncPeriod)
+	E2 := engine.NewEngine(M2, syncPeriod)
+	E3 := engine.NewEngine(M3, syncPeriod)
 
 	E1.AddMember(M2)
 	E3.AddMember(M2)
@@ -30,14 +34,19 @@ func main() {
 	go E2.Run(stop)
 	go E3.Run(stop)
 
+	var wg sync.WaitGroup
+
 	fmt.Println("------------------------------------")
 	M1.Write(simple.NewItem("david", "benque"))
 	fmt.Printf("S1:\n" + S1.Dump())
 	fmt.Printf("S2:\n" + S2.Dump())
 	fmt.Printf("S3:\n" + S3.Dump())
-	fmt.Println("------------------------------------")
+	fmt.Println("------------wait for 1 everywhere---")
 
-	time.Sleep(1 * time.Second)
+	S1.UntilCount(&wg, 1, checkPeriod)
+	S2.UntilCount(&wg, 1, checkPeriod)
+	S3.UntilCount(&wg, 1, checkPeriod)
+	wg.Wait()
 	fmt.Printf("S1:\n" + S1.Dump())
 	fmt.Printf("S2:\n" + S2.Dump())
 	fmt.Printf("S3:\n" + S3.Dump())
@@ -45,13 +54,16 @@ func main() {
 
 	M2.Write(simple.NewItem("eric", "mountain"))
 	M3.Write(simple.NewItem("cedric", "lamoriniere"))
-	time.Sleep(1 * time.Second)
 	fmt.Printf("S1:\n" + S1.Dump())
 	fmt.Printf("S2:\n" + S2.Dump())
 	fmt.Printf("S3:\n" + S3.Dump())
-	fmt.Println("------------------------------------")
+	fmt.Println("------------wait for 3 everywhere---")
 
-	time.Sleep(1 * time.Second)
+	S1.UntilCount(&wg, 3, checkPeriod)
+	S2.UntilCount(&wg, 3, checkPeriod)
+	S3.UntilCount(&wg, 3, checkPeriod)
+	wg.Wait()
+
 	fmt.Printf("S1:\n" + S1.Dump())
 	fmt.Printf("S2:\n" + S2.Dump())
 	fmt.Printf("S3:\n" + S3.Dump())
@@ -59,7 +71,44 @@ func main() {
 
 	M2.Write(simple.NewItem("eric", "super mountain"))
 	M1.Remove("david")
-	time.Sleep(2 * time.Second)
+	fmt.Printf("S1:\n" + S1.Dump())
+	fmt.Printf("S2:\n" + S2.Dump())
+	fmt.Printf("S3:\n" + S3.Dump())
+	fmt.Println("------------wait for new value and for 2 everywhere---")
+	kp := engine.KeyIDPair{Key: "eric", ID: M2.ID()}
+	fcheck := func(i engine.Item) bool {
+		if i == nil {
+			return false
+		}
+		is := i.(*simple.Item)
+		return is.Value == "super mountain"
+	}
+
+	S1.UntilCheck(&wg, kp, fcheck, checkPeriod)
+	S2.UntilCheck(&wg, kp, fcheck, checkPeriod)
+	S3.UntilCheck(&wg, kp, fcheck, checkPeriod)
+	S1.UntilCount(&wg, 2, checkPeriod)
+	S2.UntilCount(&wg, 2, checkPeriod)
+	S3.UntilCount(&wg, 2, checkPeriod)
+
+	wg.Wait()
+	fmt.Printf("S1:\n" + S1.Dump())
+	fmt.Printf("S2:\n" + S2.Dump())
+	fmt.Printf("S3:\n" + S3.Dump())
+
+	fmt.Println("------------wait for cleanup-------")
+	M2.Remove("eric")
+	M3.Remove("cedric")
+	fmt.Printf("S1:\n" + S1.Dump())
+	fmt.Printf("S2:\n" + S2.Dump())
+	fmt.Printf("S3:\n" + S3.Dump())
+	fmt.Println("------------------------------------")
+
+	S1.UntilCount(&wg, 0, checkPeriod)
+	S2.UntilCount(&wg, 0, checkPeriod)
+	S3.UntilCount(&wg, 0, checkPeriod)
+	wg.Wait()
+
 	fmt.Printf("S1:\n" + S1.Dump())
 	fmt.Printf("S2:\n" + S2.Dump())
 	fmt.Printf("S3:\n" + S3.Dump())

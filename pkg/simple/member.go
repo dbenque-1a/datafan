@@ -19,7 +19,6 @@ type Member struct {
 func NewMember(id string, store store.Store) *Member {
 	m := &Member{id: engine.ID(id), store: store}
 	m.connector = NewConnector(m)
-	go m.connector.run(make(chan struct{})) // TODO move the run somewhere else to be able to close correctly
 	return m
 }
 
@@ -50,20 +49,11 @@ func (m *Member) GetData(kps engine.KeyIDPairs) engine.Items {
 	for _, kp := range kps {
 		i := m.store.Get(kp)
 		if i == nil {
-			log.Printf("Get return nil for %s/%s in %s", kp.ID, kp.Key, m.id)
 			continue
 		}
 		items = append(items, i)
 	}
 	return items
-}
-func (m *Member) Add(items engine.Items) {
-	keys := ""
-	for _, i := range items {
-		m.store.Set(i)
-		keys += string(i.OwnedBy()) + "/" + string(i.GetKey()) + "  "
-	}
-	log.Printf("[%s] Add: %s", string(m.id), keys)
 }
 func (m *Member) Delete(kps engine.KeyIDPairs) {
 	keys := ""
@@ -71,15 +61,13 @@ func (m *Member) Delete(kps engine.KeyIDPairs) {
 		m.store.Delete(kp)
 		keys += string(kp.ID) + "/" + string(kp.Key) + "  "
 	}
-	log.Printf("[%s] Delete: %s", string(m.id), keys)
 }
-func (m *Member) Update(items engine.Items) {
+func (m *Member) Put(items engine.Items) {
 	keys := ""
 	for _, i := range items {
 		m.store.Set(i)
 		keys += string(i.OwnedBy()) + "/" + string(i.GetKey()) + "  "
 	}
-	//	log.Printf("[%s] Update: %s", string(m.id), keys)
 }
 
 func (m *Member) Write(item *Item) {

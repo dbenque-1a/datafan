@@ -50,15 +50,15 @@ type Connector interface {
 	ReceiveIndexChan() <-chan IndexMap
 	SendIndexChan() chan<- IndexMap
 	Connect(Member)
+	Run(stop <-chan struct{})
 	RequestKeysChan() chan<- DataRequest
 	ReceiveDataChan() <-chan Items
 }
 
 type LocalMember interface {
 	Member
-	Add(Items)
 	Delete(KeyIDPairs)
-	Update(Items)
+	Put(Items)
 	GetConnector() Connector
 }
 
@@ -107,12 +107,19 @@ func (e *Engine) AddMember(p Member) {
 
 func (e *Engine) Run(stop <-chan struct{}) {
 	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		e.connector.Run(stop)
+	}()
+
 	wg.Add(1)
 	//Synch out Indexes
 	go func() {
 		defer wg.Done()
 		ticker := time.NewTicker(e.syncPeriod)
-
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
@@ -142,6 +149,7 @@ func (e *Engine) Run(stop <-chan struct{}) {
 	go func() {
 		defer wg.Done()
 		ticker := time.NewTicker(20 * time.Second)
+		defer ticker.Stop()
 		for {
 			select {
 			case indexes := <-e.connector.ReceiveIndexChan():
@@ -161,7 +169,7 @@ func (e *Engine) Run(stop <-chan struct{}) {
 		for {
 			select {
 			case data := <-e.connector.ReceiveDataChan():
-				e.local.Update(data)
+				e.local.Put(data)
 			case <-stop:
 				return
 			}
@@ -173,6 +181,10 @@ func (e *Engine) Run(stop <-chan struct{}) {
 type keyPair struct {
 	current *StampedKey
 	update  *StampedKey
+}
+
+func (e *Engine) GetLocalMember() Member {
+	return e.local
 }
 
 func (e *Engine) CheckAndGetUpdates(indexMap IndexMap) {

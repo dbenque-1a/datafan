@@ -69,7 +69,7 @@ func (c *Connector) ReceiveDataChan() <-chan engine.Items {
 	return c.receiveDataChan
 }
 
-func (c *Connector) run(stop chan struct{}) {
+func (c *Connector) Run(stop <-chan struct{}) {
 
 	for {
 		select {
