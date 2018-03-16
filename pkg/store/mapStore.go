@@ -2,7 +2,6 @@ package store
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"sync"
 
@@ -12,14 +11,12 @@ import (
 type MapStore struct {
 	sync.Mutex
 	internal map[engine.ID]map[engine.Key]engine.Item
-	name     string
 }
 
 var _ Store = &MapStore{}
 
-func NewMapStore(name string) *MapStore {
+func NewMapStore() *MapStore {
 	return &MapStore{
-		name:     name,
 		internal: map[engine.ID]map[engine.Key]engine.Item{},
 	}
 }
@@ -81,6 +78,5 @@ func (m *MapStore) Dump() string {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	return fmt.Sprintf("%s:\n%s\n", m.name, string(json))
+	return string(json)
 }

@@ -27,6 +27,10 @@ func (m *Member) ID() engine.ID {
 	return m.id
 }
 
+func (m *Member) GetStore() store.Store {
+	return m.store
+}
+
 func (m *Member) GetConnector() engine.Connector {
 	return m.connector
 }
@@ -44,7 +48,12 @@ func (m *Member) GetIndexes() engine.IndexMap {
 func (m *Member) GetData(kps engine.KeyIDPairs) engine.Items {
 	items := engine.Items{}
 	for _, kp := range kps {
-		items = append(items, m.store.Get(kp))
+		i := m.store.Get(kp)
+		if i == nil {
+			log.Printf("Get return nil for %s/%s in %s", kp.ID, kp.Key, m.id)
+			continue
+		}
+		items = append(items, i)
 	}
 	return items
 }
@@ -70,7 +79,7 @@ func (m *Member) Update(items engine.Items) {
 		m.store.Set(i)
 		keys += string(i.OwnedBy()) + "/" + string(i.GetKey()) + "  "
 	}
-	log.Printf("[%s] Update: %s", string(m.id), keys)
+	//	log.Printf("[%s] Update: %s", string(m.id), keys)
 }
 
 func (m *Member) Write(item *Item) {
@@ -85,4 +94,8 @@ func (m *Member) Write(item *Item) {
 	}
 
 	m.store.Set(item)
+}
+
+func (m *Member) Remove(key engine.Key) {
+	m.store.Delete(engine.KeyIDPair{Key: key, ID: m.id})
 }

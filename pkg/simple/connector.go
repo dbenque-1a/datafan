@@ -25,11 +25,11 @@ func NewConnector(localMember *Member) *Connector {
 		localMember:  localMember,
 		remoteMember: map[engine.ID]*Member{},
 
-		receiveIndexChan: make(chan engine.IndexMap, 100),
-		sendIndexChan:    make(chan engine.IndexMap, 100),
+		receiveIndexChan: make(chan engine.IndexMap, 10),
+		sendIndexChan:    make(chan engine.IndexMap, 10),
 
-		receiveDataChan: make(chan engine.Items, 100),
-		requestKeysChan: make(chan engine.DataRequest, 100),
+		receiveDataChan: make(chan engine.Items, 10),
+		requestKeysChan: make(chan engine.DataRequest, 10),
 	}
 }
 

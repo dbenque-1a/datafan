@@ -72,24 +72,36 @@ type Item interface {
 }
 
 type Engine struct {
-	local         LocalMember
-	connected     map[ID]Member
-	connector     Connector
-	indexTime     map[ID]time.Time
-	lastLocalKeys []StampedKey
+	local                LocalMember
+	connector            Connector
+	indexTimeCacheMutext sync.Mutex
+	indexTimeCache       map[ID]time.Time
+	lastLocalKeys        []StampedKey
+	syncPeriod           time.Duration
 }
 
-func NewEngine(local LocalMember) *Engine {
+func (e *Engine) updateIndexTime(id ID, time time.Time) {
+	e.indexTimeCacheMutext.Lock()
+	defer e.indexTimeCacheMutext.Unlock()
+	e.indexTimeCache[id] = time
+}
+func (e *Engine) getIndexTime(id ID) (time.Time, bool) {
+	e.indexTimeCacheMutext.Lock()
+	defer e.indexTimeCacheMutext.Unlock()
+	t, ok := e.indexTimeCache[id]
+	return t, ok
+}
+
+func NewEngine(local LocalMember, syncPeriod time.Duration) *Engine {
 	return &Engine{
-		local:     local,
-		connected: map[ID]Member{},
-		indexTime: map[ID]time.Time{},
-		connector: local.GetConnector(),
+		local:          local,
+		indexTimeCache: map[ID]time.Time{},
+		connector:      local.GetConnector(),
+		syncPeriod:     syncPeriod,
 	}
 }
 
 func (e *Engine) AddMember(p Member) {
-	e.connected[p.ID()] = p
 	e.connector.Connect(p)
 }
 
@@ -99,7 +111,7 @@ func (e *Engine) Run(stop <-chan struct{}) {
 	//Synch out Indexes
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Second)
+		ticker := time.NewTicker(e.syncPeriod)
 
 		for {
 			select {
@@ -107,13 +119,13 @@ func (e *Engine) Run(stop <-chan struct{}) {
 				updatedIndexes := e.local.GetIndexes()
 				for id, index := range updatedIndexes.Indexes {
 					if id != e.local.ID() {
-						index.BuildTime = e.indexTime[id]
+						index.BuildTime, _ = e.getIndexTime(id)
 					} else {
 						if reflect.DeepEqual(e.lastLocalKeys, updatedIndexes.Indexes[id]) { // update local generation time only in case of changes
-							index.BuildTime = e.indexTime[id]
+							index.BuildTime, _ = e.getIndexTime(id)
 						} else {
 							index.BuildTime = time.Now()
-							e.indexTime[id] = index.BuildTime
+							e.updateIndexTime(id, index.BuildTime)
 						}
 					}
 					updatedIndexes.Indexes[id] = index
@@ -186,12 +198,12 @@ func (e *Engine) CheckAndGetUpdates(indexMap IndexMap) {
 			continue // because that update can't help for that ID. Absence of proof is not a proof of absence
 		}
 
-		previous, _ := e.indexTime[id]
+		previous, _ := e.getIndexTime(id)
 		//Check if we already have the latest version
 		if !previous.Before(updateIndex.BuildTime) {
 			continue // we have a better version
 		}
-		e.indexTime[id] = updateIndex.BuildTime
+		e.updateIndexTime(id, updateIndex.BuildTime)
 
 		//index all keys and pair them
 		allKeys := map[Key]keyPair{}
