@@ -15,36 +15,30 @@ import (
 )
 
 func BenchmarkAddLine(b *testing.B) {
-	syncPeriod := 20 * time.Millisecond
-	s1 := rand.NewSource(time.Now().UnixNano())
-	r1 := rand.New(s1)
-
 	N := b.N
-
-	members, engines := prepareTest(N, "line", true, syncPeriod)
 	D := 3
 
-	for i := range members {
-		for d := 0; d < D; d++ {
-			name := engine.Key(names[d])
-			val := fmt.Sprintf("%d", r1.Intn(1000))
-			members[i].Write(NewItem(name, val))
-		}
-	}
+	_, engines := prepareTest(N, D, "line", true, syncPeriod)
 
 	b.ResetTimer()
+	runAndWaitForCount(D*N, engines, checkPeriod)
+}
+
+func runAndWaitForCount(count int, engines []*engine.Engine, checkPeriod time.Duration) {
+	members := make([]*Member, len(engines))
+
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
-	for i := 0; i < N; i++ {
+	for i := 0; i < len(members); i++ {
+		members[i] = engines[i].GetLocalMember().(*Member)
 		go engines[i].Run(stop)
 		s := members[i].GetStore().(*store.MapStore)
-		s.UntilCount(&wg, D*N, syncPeriod)
+		s.UntilCount(&wg, count, checkPeriod)
 	}
 	wg.Wait()
 	close(stop)
 }
-
-func prepareTest(N int, meshType string, panicOnDelete bool, syncPeriod time.Duration) ([]*Member, []*engine.Engine) {
+func prepareTest(N int, D int, meshType string, panicOnDelete bool, syncPeriod time.Duration) ([]*Member, []*engine.Engine) {
 	members := make([]*Member, N)
 	engines := make([]*engine.Engine, N)
 
@@ -78,19 +72,92 @@ func prepareTest(N int, meshType string, panicOnDelete bool, syncPeriod time.Dur
 			engines[i].AddMember(members[i-1])
 			engines[i].AddMember(members[i-2])
 		}
+		engines[0].AddMember(members[1])
+	case "circle":
+		for i := 1; i < len(members); i++ {
+			engines[i].AddMember(members[i-1])
+		}
+		engines[0].AddMember(members[len(members)-1])
+	case "circle2":
+		for i := 2; i < len(members); i++ {
+			engines[i].AddMember(members[i-1])
+			engines[i].AddMember(members[i-2])
+		}
+		engines[1].AddMember(members[len(members)-1])
+		engines[0].AddMember(members[len(members)-1])
+		engines[0].AddMember(members[len(members)-2])
 
 	default: // line
 		for i := 1; i < len(members); i++ {
 			engines[i].AddMember(members[i-1])
 		}
 	}
+
+	for i := range members {
+		for d := 0; d < D; d++ {
+			name := engine.Key(names[d])
+			val := fmt.Sprintf("%d", r1.Intn(1000))
+			members[i].Write(NewItem(name, val))
+		}
+	}
+
 	return members, engines
 }
 
-func TestFuzzyAddOnly(t *testing.T) {
+var s1 = rand.NewSource(time.Now().UnixNano())
+var r1 = rand.New(s1)
+var NN = 20
+var DD = 50
+var syncPeriod = 20 * time.Millisecond
+var checkPeriod = 20 * time.Millisecond
 
-	s1 := rand.NewSource(time.Now().UnixNano())
-	r1 := rand.New(s1)
+func TestAddOnlyLine(t *testing.T) {
+
+	members, engines := prepareTest(NN, DD, "line", true, syncPeriod)
+	runAndWaitForCount(DD*NN, engines, checkPeriod)
+	validateSameStore(t, members)
+	if NN < 30 {
+		fmt.Println(ToDot(members, os.TempDir()+"/TestLine"))
+	}
+}
+
+func TestAddOnlyLineDouble(t *testing.T) {
+	members, engines := prepareTest(NN, DD, "line2", true, syncPeriod)
+	runAndWaitForCount(DD*NN, engines, checkPeriod)
+	validateSameStore(t, members)
+	if NN < 30 {
+		fmt.Println(ToDot(members, os.TempDir()+"/TestLineDouble"))
+	}
+}
+
+func TestAddOnlyCircle1(t *testing.T) {
+	members, engines := prepareTest(NN, DD, "circle", true, syncPeriod)
+	runAndWaitForCount(DD*NN, engines, checkPeriod)
+	validateSameStore(t, members)
+	if NN < 30 {
+		fmt.Println(ToDot(members, os.TempDir()+"/TestCircle"))
+	}
+}
+
+func TestAddOnlyCircleDouble(t *testing.T) {
+	members, engines := prepareTest(NN, DD, "circle2", true, syncPeriod)
+	runAndWaitForCount(DD*NN, engines, checkPeriod)
+	validateSameStore(t, members)
+	if NN < 30 {
+		fmt.Println(ToDot(members, os.TempDir()+"/TestCircleDouble"))
+	}
+}
+
+func TestAddOnlyFullMesh(t *testing.T) {
+
+	members, engines := prepareTest(NN, DD, "full", true, syncPeriod)
+	runAndWaitForCount(DD*NN, engines, checkPeriod)
+	validateSameStore(t, members)
+	if NN < 30 {
+		fmt.Println(ToDot(members, os.TempDir()+"/TestFull"))
+	}
+}
+func TestFuzzyAddOnly(t *testing.T) {
 
 	syncPeriod := 10 * time.Millisecond
 
@@ -115,7 +182,7 @@ func TestFuzzyAddOnly(t *testing.T) {
 				if x == i {
 					x--
 				}
-				fmt.Printf("%s - %s\n", members[i].ID(), members[x].ID())
+				//fmt.Printf("%s - %s\n", members[i].ID(), members[x].ID())
 				engines[i].AddMember(members[x])
 
 				edge++
@@ -144,6 +211,11 @@ func TestFuzzyAddOnly(t *testing.T) {
 	wg.Wait()
 	close(stop)
 
+	validateSameStore(t, members)
+	fmt.Println(ToDot(members, os.TempDir()+"/testFuzzy"))
+}
+
+func validateSameStore(t *testing.T, members []*Member) {
 	for i := range members {
 		for j := range members {
 			storeI := members[i].GetStore().(*store.MapStore)
@@ -154,8 +226,7 @@ func TestFuzzyAddOnly(t *testing.T) {
 
 			if di != dj {
 
-				t.Fatalf("Boum (allData=%d):\n%d in %s\n%d in %s\ntopo: %s\n",
-					allData,
+				t.Fatalf("Boum:\n%d in %s\n%d in %s\ntopo: %s\n",
 					storeI.Count(),
 					toTmpFile(t, "fuzzi", []byte(di)),
 					storeJ.Count(),

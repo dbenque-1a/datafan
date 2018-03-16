@@ -51,9 +51,9 @@ func (c *Connector) connect(m engine.Member, twoWays bool) {
 		log.Fatalf("Can't connect member of different types.")
 	}
 
-	if _, ok := c.remoteMember[mm.ID()]; ok {
-		log.Printf("Member %s is already connected to local %s", mm.ID(), c.localMember.ID())
-	}
+	// if _, ok := c.remoteMember[mm.ID()]; ok {
+	// 	log.Printf("Member %s is already connected to local %s", mm.ID(), c.localMember.ID())
+	// }
 
 	c.remoteMember[mm.ID()] = mm
 

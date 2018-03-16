@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -125,14 +126,16 @@ func (e *Engine) Run(stop <-chan struct{}) {
 			case <-ticker.C:
 				updatedIndexes := e.local.GetIndexes()
 				for id, index := range updatedIndexes.Indexes {
+					//Set index build time
 					if id != e.local.ID() {
 						index.BuildTime, _ = e.getIndexTime(id)
 					} else {
-						if reflect.DeepEqual(e.lastLocalKeys, updatedIndexes.Indexes[id]) { // update local generation time only in case of changes
+						if reflect.DeepEqual(e.lastLocalKeys, updatedIndexes.Indexes[id].StampedKeys) { // update local generation time only in case of changes
 							index.BuildTime, _ = e.getIndexTime(id)
 						} else {
 							index.BuildTime = time.Now()
 							e.updateIndexTime(id, index.BuildTime)
+							e.lastLocalKeys = updatedIndexes.Indexes[id].StampedKeys
 						}
 					}
 					updatedIndexes.Indexes[id] = index
@@ -253,6 +256,8 @@ func (e *Engine) CheckAndGetUpdates(indexMap IndexMap) {
 			e.connector.RequestKeysChan() <- DataRequest{KeyIDPairs: toFetch, RequestDestination: indexMap.Source, RequestSource: e.local.ID()}
 		}
 		if len(toDelete) > 0 {
+			fmt.Printf("[%v] DELETE count %d from %v\n", e.local.ID(), len(toDelete), id)
+
 			e.local.Delete(toDelete)
 		}
 	}
