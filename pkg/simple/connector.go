@@ -8,7 +8,7 @@ import (
 )
 
 type Connector struct {
-	remoteHandling sync.Mutex
+	remoteHandling sync.RWMutex
 	localMember    *Member
 	remoteMember   map[engine.ID]*Member
 
@@ -25,11 +25,11 @@ func NewConnector(localMember *Member) *Connector {
 		localMember:  localMember,
 		remoteMember: map[engine.ID]*Member{},
 
-		receiveIndexChan: make(chan engine.IndexMap, 10),
-		sendIndexChan:    make(chan engine.IndexMap, 10),
+		receiveIndexChan: make(chan engine.IndexMap, 50),
+		sendIndexChan:    make(chan engine.IndexMap, 50),
 
-		receiveDataChan: make(chan engine.Items, 10),
-		requestKeysChan: make(chan engine.DataRequest, 10),
+		receiveDataChan: make(chan engine.Items, 50),
+		requestKeysChan: make(chan engine.DataRequest, 50),
 	}
 }
 
@@ -75,8 +75,8 @@ func (c *Connector) Run(stop <-chan struct{}) {
 		select {
 		case indexFromChan := <-c.sendIndexChan: // fan out to remote
 			go func(index engine.IndexMap) {
-				c.remoteHandling.Lock()
-				defer c.remoteHandling.Unlock()
+				c.remoteHandling.RLock()
+				defer c.remoteHandling.RUnlock()
 				for _, m := range c.remoteMember {
 					m.connector.receiveIndexChan <- index
 				}
@@ -86,8 +86,8 @@ func (c *Connector) Run(stop <-chan struct{}) {
 				// handle the request
 				go func(rq engine.DataRequest) {
 					items := c.localMember.GetData(rq.KeyIDPairs)
-					c.remoteHandling.Lock()
-					defer c.remoteHandling.Unlock()
+					c.remoteHandling.RLock()
+					defer c.remoteHandling.RUnlock()
 					m := c.remoteMember[rq.RequestSource]
 					if m != nil {
 						m.connector.receiveDataChan <- items
@@ -96,8 +96,8 @@ func (c *Connector) Run(stop <-chan struct{}) {
 			} else {
 				// forward the query to the good member
 				go func(rq engine.DataRequest) {
-					c.remoteHandling.Lock()
-					defer c.remoteHandling.Unlock()
+					c.remoteHandling.RLock()
+					defer c.remoteHandling.RUnlock()
 					m := c.remoteMember[rq.RequestDestination]
 					if m != nil {
 						m.connector.requestKeysChan <- rqFromChan

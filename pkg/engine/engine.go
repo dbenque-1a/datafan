@@ -74,7 +74,7 @@ type Item interface {
 type Engine struct {
 	local                LocalMember
 	connector            Connector
-	indexTimeCacheMutext sync.Mutex
+	indexTimeCacheMutext sync.RWMutex
 	indexTimeCache       map[ID]time.Time
 	lastLocalKeys        []StampedKey
 	syncPeriod           time.Duration
@@ -86,8 +86,8 @@ func (e *Engine) updateIndexTime(id ID, time time.Time) {
 	e.indexTimeCache[id] = time
 }
 func (e *Engine) getIndexTime(id ID) (time.Time, bool) {
-	e.indexTimeCacheMutext.Lock()
-	defer e.indexTimeCacheMutext.Unlock()
+	e.indexTimeCacheMutext.RLock()
+	defer e.indexTimeCacheMutext.RUnlock()
 	t, ok := e.indexTimeCache[id]
 	return t, ok
 }

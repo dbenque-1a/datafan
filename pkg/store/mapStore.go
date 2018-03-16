@@ -11,7 +11,7 @@ import (
 )
 
 type MapStore struct {
-	sync.Mutex
+	sync.RWMutex
 	internal      map[engine.ID]map[engine.Key]engine.Item
 	panicOnDelete bool // for test purposes
 }
@@ -28,8 +28,8 @@ func (m *MapStore) PanicOnDelete() {
 }
 
 func (m *MapStore) GetMembers() []engine.ID {
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 	members := []engine.ID{}
 	for id := range m.internal {
 		members = append(members, id)
@@ -37,8 +37,8 @@ func (m *MapStore) GetMembers() []engine.ID {
 	return members
 }
 func (m *MapStore) GetIndex(id engine.ID) engine.Index {
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	index := engine.Index{}
 	if s, ok := m.internal[id]; ok {
@@ -71,8 +71,8 @@ func (m *MapStore) Set(i engine.Item) {
 	s[i.GetKey()] = i.DeepCopy()
 }
 func (m *MapStore) Get(kp engine.KeyIDPair) engine.Item {
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 	if s, ok := m.internal[kp.ID]; ok {
 		if v, ok := s[kp.Key]; ok {
 			return v.DeepCopy()
@@ -82,8 +82,8 @@ func (m *MapStore) Get(kp engine.KeyIDPair) engine.Item {
 }
 
 func (m *MapStore) Dump() string {
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 	json, err := json.MarshalIndent(m.internal, "", "\t")
 	if err != nil {
 		log.Fatal(err)
@@ -92,8 +92,8 @@ func (m *MapStore) Dump() string {
 }
 
 func (m *MapStore) Count() (count int) {
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 	for _, v := range m.internal {
 		count += len(v)
 	}
