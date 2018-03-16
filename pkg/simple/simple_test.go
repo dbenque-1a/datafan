@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -101,7 +102,7 @@ func TestFuzzyAddOnly(t *testing.T) {
 	for i := range members {
 		members[i] = NewMember(fmt.Sprintf("M%d", i), store.NewMapStore())
 		engines[i] = engine.NewEngine(members[i], syncPeriod)
-		members[i].GetStore().(*store.MapStore).PanicOnDelete()
+		//members[i].GetStore().(*store.MapStore).PanicOnDelete()
 	}
 
 	edge := 0
@@ -152,16 +153,16 @@ func TestFuzzyAddOnly(t *testing.T) {
 			dj := storeJ.Dump()
 
 			if di != dj {
-				t.Fatalf("Boum (allData=%d):\n%d in %s\n%d in %s\n",
+
+				t.Fatalf("Boum (allData=%d):\n%d in %s\n%d in %s\ntopo: %s\n",
 					allData,
 					storeI.Count(),
 					toTmpFile(t, "fuzzi", []byte(di)),
 					storeJ.Count(),
 					toTmpFile(t, "fuzzj", []byte(dj)),
+					ToDot(members, os.TempDir()+"/members"),
 				)
 
-				{
-				}
 			}
 		}
 	}
