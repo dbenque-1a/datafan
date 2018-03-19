@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package datafan;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+message Item {
+    bytes data = 1;
+    string key = 2;
+    google.protobuf.Timestamp timestamp = 3;
+    string owner = 4;
+}
+
+message Items {
+    repeated Item items =1;
+}
+
+message KeyIDPair {
+    string key = 1;
+    string id =2;
+}
+
+message KeyIDPairs {
+    repeated KeyIDPair keyIDPairs = 1;
+}
+
+message StampedKey {
+    string key = 1;
+    google.protobuf.Timestamp timestamp = 2;
+}
+
+message Index {
+    google.protobuf.Timestamp buildTime = 1;
+    repeated StampedKey stamptedKeys = 2;
+}
+
+message IndexMap {
+    string source = 1;
+    map<string,Index> indexes = 2;
+}
+
+service IndexMapCollector {
+    rpc CollectIndexMap (IndexMap) returns (google.protobuf.Empty);
+}
+
+service DataRequest {
+    rpc GetData(KeyIDPairs) returns (Items);
+}
