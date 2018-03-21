@@ -13,12 +13,12 @@ var _ engine.LocalMember = &Member{}
 type Member struct {
 	id        engine.ID
 	store     store.Store
-	connector *Connector
+	connector engine.Connector
 }
 
 func NewMember(id string, store store.Store) *Member {
 	m := &Member{id: engine.ID(id), store: store}
-	m.connector = NewConnector(m)
+	m.connector = engine.NewConnector(m, NewConnector)
 	return m
 }
 

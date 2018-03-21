@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/dbenque/datafan/pkg/engine"
 	"github.com/dbenque/datafan/pkg/store"
 )
 
@@ -30,7 +31,7 @@ func ToDot(members []*Member, filepath string) string {
 
 	links := map[string]edge{}
 	for _, p := range members {
-		for _, n := range p.connector.remoteMember {
+		for _, n := range p.connector.(*engine.ConnectorImpl).ConnectorCore.(*Connector).remoteMember {
 			e := NewEdge(p, n)
 			k := e.Key()
 			if _, ok := links[k]; !ok {

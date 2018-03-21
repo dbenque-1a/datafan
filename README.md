@@ -1,4 +1,4 @@
-# Datafan
+# DataFan
 
 We have a mesh of Members. Each Member is connected to 1-N other Member.
 A Member is **owned** of a set of data. Only that Member can modify the data that it owns.
