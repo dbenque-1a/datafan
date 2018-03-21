@@ -5,7 +5,7 @@ type ConnectorImpl struct {
 	ReceiveIndexCh chan IndexMap
 	sendIndexCh    chan IndexMap
 	RequestKeysCh  chan DataRequest
-	ReceiveDataCh  chan Items
+	ReceiveDataCh  chan DataResponse
 }
 
 var _ Connector = &ConnectorImpl{}
@@ -17,7 +17,7 @@ func NewConnector(localMember LocalMember, coreFactory ConnectorCoreFactory) *Co
 		ReceiveIndexCh: make(chan IndexMap, 50),
 		sendIndexCh:    make(chan IndexMap, 50),
 
-		ReceiveDataCh: make(chan Items, 50),
+		ReceiveDataCh: make(chan DataResponse, 50),
 		RequestKeysCh: make(chan DataRequest, 50),
 	}
 	impl.ConnectorCore = coreFactory(localMember, impl)
@@ -34,7 +34,7 @@ func (c *ConnectorImpl) SendIndexChan() chan<- IndexMap {
 func (c *ConnectorImpl) RequestKeysChan() chan<- DataRequest {
 	return c.RequestKeysCh
 }
-func (c *ConnectorImpl) ReceiveDataChan() <-chan Items {
+func (c *ConnectorImpl) ReceiveDataChan() <-chan DataResponse {
 	return c.ReceiveDataCh
 }
 

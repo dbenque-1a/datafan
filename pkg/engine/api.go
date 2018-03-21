@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"strings"
 	"time"
 )
 
@@ -18,9 +19,15 @@ type KeyIDPair struct {
 type KeyIDPairs []KeyIDPair
 
 type DataRequest struct {
-	RequestSource      ID
-	RequestDestination ID
+	RequestSource       ID
+	RequestDestination  ID
+	AssociatedBuildTime map[ID]time.Time
 	KeyIDPairs
+}
+
+type DataResponse struct {
+	AssociatedBuildTime map[ID]time.Time
+	Items               Items
 }
 
 type StampedKey struct {
@@ -28,9 +35,32 @@ type StampedKey struct {
 	Timestamp time.Time
 }
 
+type StampedKeys []StampedKey
+
+func (a StampedKeys) Len() int      { return len(a) }
+func (a StampedKeys) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a StampedKeys) Less(i, j int) bool {
+	return strings.Compare(string(a[i].Key), string(a[j].Key)) > 0
+}
+
+func (a StampedKeys) Equal(b StampedKeys) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Key != b[i].Key {
+			return false
+		}
+		if a[i].Timestamp != b[i].Timestamp {
+			return false
+		}
+	}
+	return true
+}
+
 type Index struct {
 	BuildTime   time.Time
-	StampedKeys []StampedKey
+	StampedKeys StampedKeys
 }
 
 type IndexMap struct {
@@ -55,7 +85,7 @@ type ConnectorChan interface {
 	ReceiveIndexChan() <-chan IndexMap
 	SendIndexChan() chan<- IndexMap
 	RequestKeysChan() chan<- DataRequest
-	ReceiveDataChan() <-chan Items
+	ReceiveDataChan() <-chan DataResponse
 }
 type Connector interface {
 	ConnectorChan

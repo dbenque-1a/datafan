@@ -172,7 +172,9 @@ func (c *testConnector) ProcessDataRequest(rq DataRequest) {
 	defer c.remoteHandling.RUnlock()
 	m := c.remoteMember[rq.RequestSource]
 	if m != nil {
-		m.connector.(*ConnectorImpl).ReceiveDataCh <- items
+		m.connector.(*ConnectorImpl).ReceiveDataCh <- DataResponse{Items: items, AssociatedBuildTime: rq.AssociatedBuildTime}
+	} else {
+		log.Fatalf("Lost member ProcessDataRequest")
 	}
 }
 
@@ -182,5 +184,7 @@ func (c *testConnector) ForwardDataRequest(rq DataRequest) {
 	m := c.remoteMember[rq.RequestDestination]
 	if m != nil {
 		m.connector.(*ConnectorImpl).RequestKeysCh <- rq
+	} else {
+		log.Fatalf("Lost member ForwardDataRequest")
 	}
 }

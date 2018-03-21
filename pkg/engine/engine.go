@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"reflect"
+	"sort"
 	"sync"
 	"time"
 )
@@ -64,7 +64,8 @@ func (e *Engine) Run(stop <-chan struct{}) {
 					if id != e.local.ID() {
 						index.BuildTime, _ = e.getIndexTime(id)
 					} else {
-						if reflect.DeepEqual(e.lastLocalKeys, updatedIndexes.Indexes[id].StampedKeys) { // update local generation time only in case of changes
+						sort.Sort(updatedIndexes.Indexes[id].StampedKeys)
+						if updatedIndexes.Indexes[id].StampedKeys.Equal(e.lastLocalKeys) { // To investigate why /*reflect.DeepEqual(e.lastLocalKeys, updatedIndexes.Indexes[id].StampedKeys)*/ does not work here
 							index.BuildTime, _ = e.getIndexTime(id)
 						} else {
 							index.BuildTime = time.Now()
@@ -105,8 +106,11 @@ func (e *Engine) Run(stop <-chan struct{}) {
 		defer wg.Done()
 		for {
 			select {
-			case data := <-e.connector.ReceiveDataChan():
-				e.local.Put(data)
+			case dataresponse := <-e.connector.ReceiveDataChan():
+				e.local.Put(dataresponse.Items)
+				for id, t := range dataresponse.AssociatedBuildTime {
+					e.updateIndexTime(id, t)
+				}
 			case <-stop:
 				return
 			}
@@ -152,7 +156,6 @@ func (e *Engine) CheckAndGetUpdates(indexMap IndexMap) {
 		if !previous.Before(updateIndex.BuildTime) {
 			continue // we have a better version
 		}
-		e.updateIndexTime(id, updateIndex.BuildTime)
 
 		//index all keys and pair them
 		allKeys := map[Key]keyPair{}
@@ -187,10 +190,11 @@ func (e *Engine) CheckAndGetUpdates(indexMap IndexMap) {
 			}
 		}
 		if len(toFetch) > 0 {
-			e.connector.RequestKeysChan() <- DataRequest{KeyIDPairs: toFetch, RequestDestination: indexMap.Source, RequestSource: e.local.ID()}
+			e.connector.RequestKeysChan() <- DataRequest{KeyIDPairs: toFetch, RequestDestination: indexMap.Source, RequestSource: e.local.ID(), AssociatedBuildTime: map[ID]time.Time{id: updateIndex.BuildTime}}
 		}
 		if len(toDelete) > 0 {
 			e.local.Delete(toDelete)
+			e.updateIndexTime(id, updateIndex.BuildTime)
 		}
 	}
 }

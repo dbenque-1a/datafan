@@ -17,8 +17,8 @@ var r1 = rand.New(s1)
 var NN = 15
 var DD = 5
 
-var syncPeriod = 20 * time.Millisecond
-var checkPeriod = 20 * time.Millisecond
+var syncPeriod = 10 * time.Millisecond
+var checkPeriod = 10 * time.Millisecond
 
 func BenchmarkAddLine(b *testing.B) {
 	N := b.N
@@ -29,7 +29,7 @@ func BenchmarkAddLine(b *testing.B) {
 	b.ResetTimer()
 	stop := make(chan struct{})
 	runEngines(stop, engines)
-	waitForCount(D*N, members, checkPeriod)
+	waitForCount(D*N, members, checkPeriod, 60*time.Second)
 	close(stop)
 }
 
@@ -39,19 +39,19 @@ func runEngines(stop chan struct{}, engines []*Engine) {
 	}
 
 }
-func waitForCount(count int, members []*testMember, checkPeriod time.Duration) {
+func waitForCount(count int, members []*testMember, checkPeriod time.Duration, timeout time.Duration) {
 	var wg sync.WaitGroup
 	for i := 0; i < len(members); i++ {
 		s := members[i].GetStore().(*MapStore)
-		s.UntilCount(&wg, count, checkPeriod)
+		s.UntilCount(&wg, count, checkPeriod, timeout)
 	}
 	wg.Wait()
 }
-func waitForCheck(members []*testMember, checkPeriod time.Duration, kp KeyIDPair, check func(i Item) bool) {
+func waitForCheck(members []*testMember, checkPeriod time.Duration, kp KeyIDPair, check func(i Item) bool, timeout time.Duration) {
 	var wg sync.WaitGroup
 	for i := 0; i < len(members); i++ {
 		s := members[i].GetStore().(*MapStore)
-		s.UntilCheck(&wg, kp, check, checkPeriod)
+		s.UntilCheck(&wg, kp, check, checkPeriod, timeout)
 	}
 	wg.Wait()
 }
@@ -150,10 +150,10 @@ func prepareTest(N int, D int, meshType string, panicOnDelete bool, syncPeriod t
 func addOnlySequence(t *testing.T, members []*testMember, engines []*Engine) {
 	stop := make(chan struct{})
 	runEngines(stop, engines)
-	waitForCount(DD*NN, members, checkPeriod)
+	waitForCount(DD*NN, members, checkPeriod, 2*time.Second)
 	validateSameStore(t, members)
 	members[0].Write(newTestItem("David", "Benque"))
-	waitForCount(DD*NN+1, members, checkPeriod)
+	waitForCount(DD*NN+1, members, checkPeriod, 2*time.Second)
 	validateSameStore(t, members)
 	members[0].Write(newTestItem("David", "dbenque"))
 	waitForCheck(members, checkPeriod, KeyIDPair{Key: "David", ID: members[0].id},
@@ -163,7 +163,7 @@ func addOnlySequence(t *testing.T, members []*testMember, engines []*Engine) {
 			}
 			is := i.(*testItem)
 			return is.Value == "dbenque"
-		})
+		}, 2*time.Second)
 	validateSameStore(t, members)
 	close(stop)
 }
@@ -171,10 +171,10 @@ func addOnlySequence(t *testing.T, members []*testMember, engines []*Engine) {
 func allSequence(t *testing.T, members []*testMember, engines []*Engine) {
 	stop := make(chan struct{})
 	runEngines(stop, engines)
-	waitForCount(DD*NN, members, checkPeriod)
+	waitForCount(DD*NN, members, checkPeriod, 2*time.Second)
 	validateSameStore(t, members)
 	members[0].Write(newTestItem("David", "Benque"))
-	waitForCount(DD*NN+1, members, checkPeriod)
+	waitForCount(DD*NN+1, members, checkPeriod, 2*time.Second)
 	validateSameStore(t, members)
 	members[0].Write(newTestItem("David", "dbenque"))
 	waitForCheck(members, checkPeriod, KeyIDPair{Key: "David", ID: members[0].id},
@@ -184,10 +184,10 @@ func allSequence(t *testing.T, members []*testMember, engines []*Engine) {
 			}
 			is := i.(*testItem)
 			return is.Value == "dbenque"
-		})
+		}, 2*time.Second)
 	validateSameStore(t, members)
 	members[0].Remove("David")
-	waitForCount(DD*NN, members, checkPeriod)
+	waitForCount(DD*NN, members, checkPeriod, 2*time.Second)
 	validateSameStore(t, members)
 	close(stop)
 }
@@ -328,23 +328,21 @@ func TestEngine(t *testing.T) {
 			panicOnDelete: true,
 			syncPeriod:    syncPeriod,
 			scenario:      addOnlySequence,
-			dot:           true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			members, engines := prepareTest(tt.nbMember, tt.nbData, tt.topo, tt.panicOnDelete, tt.syncPeriod)
-
-			run := func() {
+			run := func(name string) {
 				defer func() {
 					if r := recover(); r != nil {
-						t.Fatalf("A panic was detected (a delete while panicOnDelete=true?) in test %s", tt.name)
+						t.Fatalf("A panic was detected (a delete while panicOnDelete=true?) in test %s", name)
 					}
 				}()
+				fmt.Println("Running " + name)
 				tt.scenario(t, members, engines)
 			}
-
-			run()
+			run(t.Name())
 			if tt.dot {
 				fmt.Println(utils.ToDot(buildConnectionMap(members), os.TempDir()+tt.name, dotCustomizer))
 			}
@@ -418,7 +416,7 @@ func TestFuzzyAddOnly(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for i := range members {
-		members[i].GetStore().(*MapStore).UntilCount(&wg, allData, syncPeriod)
+		members[i].GetStore().(*MapStore).UntilCount(&wg, allData, syncPeriod, 40*time.Second)
 	}
 	wg.Wait()
 	close(stop)

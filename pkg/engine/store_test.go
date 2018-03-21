@@ -137,14 +137,24 @@ func (m *MapStore) Count() (count int) {
 }
 
 //UntilCount for test purposes only
-func (m *MapStore) UntilCount(wg *sync.WaitGroup, count int, checkPeriod time.Duration) {
+func (m *MapStore) UntilCount(wg *sync.WaitGroup, count int, checkPeriod time.Duration, timeout time.Duration) {
+	m.RLock()
+	defer m.RUnlock()
 	wg.Add(1)
+
+	tc := time.After(timeout)
+
 	go func() {
 		defer wg.Done()
 		t := time.NewTicker(checkPeriod)
 		defer t.Stop()
-		for range t.C {
-			if m.Count() == count {
+		for {
+			select {
+			case <-t.C:
+				if m.Count() == count {
+					return
+				}
+			case <-tc:
 				return
 			}
 		}
@@ -152,14 +162,25 @@ func (m *MapStore) UntilCount(wg *sync.WaitGroup, count int, checkPeriod time.Du
 }
 
 //UntilCount for test purposes only
-func (m *MapStore) UntilCheck(wg *sync.WaitGroup, kp KeyIDPair, check func(i Item) bool, checkPeriod time.Duration) {
+func (m *MapStore) UntilCheck(wg *sync.WaitGroup, kp KeyIDPair, check func(i Item) bool, checkPeriod time.Duration, timeout time.Duration) {
+	m.RLock()
+	defer m.RUnlock()
 	wg.Add(1)
+
+	tc := time.After(timeout)
+
 	go func() {
 		defer wg.Done()
 		t := time.NewTicker(checkPeriod)
 		defer t.Stop()
-		for range t.C {
-			if check(m.Get(kp)) {
+
+		for {
+			select {
+			case <-t.C:
+				if check(m.Get(kp)) {
+					return
+				}
+			case <-tc:
 				return
 			}
 		}
