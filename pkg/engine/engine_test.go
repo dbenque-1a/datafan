@@ -1,4 +1,4 @@
-package simple
+package engine
 
 import (
 	"fmt"
@@ -9,8 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dbenque/datafan/pkg/engine"
-	"github.com/dbenque/datafan/pkg/store"
+	"github.com/dbenque/datafan/pkg/utils"
 )
 
 var s1 = rand.NewSource(time.Now().UnixNano())
@@ -34,38 +33,38 @@ func BenchmarkAddLine(b *testing.B) {
 	close(stop)
 }
 
-func runEngines(stop chan struct{}, engines []*engine.Engine) {
+func runEngines(stop chan struct{}, engines []*Engine) {
 	for _, e := range engines {
 		go e.Run(stop)
 	}
 
 }
-func waitForCount(count int, members []*Member, checkPeriod time.Duration) {
+func waitForCount(count int, members []*testMember, checkPeriod time.Duration) {
 	var wg sync.WaitGroup
 	for i := 0; i < len(members); i++ {
-		s := members[i].GetStore().(*store.MapStore)
+		s := members[i].GetStore().(*MapStore)
 		s.UntilCount(&wg, count, checkPeriod)
 	}
 	wg.Wait()
 }
-func waitForCheck(members []*Member, checkPeriod time.Duration, kp engine.KeyIDPair, check func(i engine.Item) bool) {
+func waitForCheck(members []*testMember, checkPeriod time.Duration, kp KeyIDPair, check func(i Item) bool) {
 	var wg sync.WaitGroup
 	for i := 0; i < len(members); i++ {
-		s := members[i].GetStore().(*store.MapStore)
+		s := members[i].GetStore().(*MapStore)
 		s.UntilCheck(&wg, kp, check, checkPeriod)
 	}
 	wg.Wait()
 }
 
-func prepareTest(N int, D int, meshType string, panicOnDelete bool, syncPeriod time.Duration) ([]*Member, []*engine.Engine) {
-	members := make([]*Member, N)
-	engines := make([]*engine.Engine, N)
+func prepareTest(N int, D int, meshType string, panicOnDelete bool, syncPeriod time.Duration) ([]*testMember, []*Engine) {
+	members := make([]*testMember, N)
+	engines := make([]*Engine, N)
 
 	for i := range members {
-		members[i] = NewMember(fmt.Sprintf("M%d", i), store.NewMapStore())
-		engines[i] = engine.NewEngine(members[i], syncPeriod)
+		members[i] = newTestMember(fmt.Sprintf("M%d", i), NewMapStore())
+		engines[i] = NewEngine(members[i], syncPeriod)
 		if panicOnDelete {
-			members[i].GetStore().(*store.MapStore).PanicOnDelete()
+			members[i].GetStore().(*MapStore).PanicOnDelete()
 		}
 	}
 
@@ -139,51 +138,51 @@ func prepareTest(N int, D int, meshType string, panicOnDelete bool, syncPeriod t
 
 	for i := range members {
 		for d := 0; d < D; d++ {
-			name := engine.Key(names[d])
+			name := Key(names[d])
 			val := fmt.Sprintf("%d", r1.Intn(1000))
-			members[i].Write(NewItem(name, val))
+			members[i].Write(newTestItem(name, val))
 		}
 	}
 
 	return members, engines
 }
 
-func addOnlySequence(t *testing.T, members []*Member, engines []*engine.Engine) {
+func addOnlySequence(t *testing.T, members []*testMember, engines []*Engine) {
 	stop := make(chan struct{})
 	runEngines(stop, engines)
 	waitForCount(DD*NN, members, checkPeriod)
 	validateSameStore(t, members)
-	members[0].Write(NewItem("David", "Benque"))
+	members[0].Write(newTestItem("David", "Benque"))
 	waitForCount(DD*NN+1, members, checkPeriod)
 	validateSameStore(t, members)
-	members[0].Write(NewItem("David", "dbenque"))
-	waitForCheck(members, checkPeriod, engine.KeyIDPair{Key: "David", ID: members[0].id},
-		func(i engine.Item) bool {
+	members[0].Write(newTestItem("David", "dbenque"))
+	waitForCheck(members, checkPeriod, KeyIDPair{Key: "David", ID: members[0].id},
+		func(i Item) bool {
 			if i == nil {
 				return false
 			}
-			is := i.(*Item)
+			is := i.(*testItem)
 			return is.Value == "dbenque"
 		})
 	validateSameStore(t, members)
 	close(stop)
 }
 
-func allSequence(t *testing.T, members []*Member, engines []*engine.Engine) {
+func allSequence(t *testing.T, members []*testMember, engines []*Engine) {
 	stop := make(chan struct{})
 	runEngines(stop, engines)
 	waitForCount(DD*NN, members, checkPeriod)
 	validateSameStore(t, members)
-	members[0].Write(NewItem("David", "Benque"))
+	members[0].Write(newTestItem("David", "Benque"))
 	waitForCount(DD*NN+1, members, checkPeriod)
 	validateSameStore(t, members)
-	members[0].Write(NewItem("David", "dbenque"))
-	waitForCheck(members, checkPeriod, engine.KeyIDPair{Key: "David", ID: members[0].id},
-		func(i engine.Item) bool {
+	members[0].Write(newTestItem("David", "dbenque"))
+	waitForCheck(members, checkPeriod, KeyIDPair{Key: "David", ID: members[0].id},
+		func(i Item) bool {
 			if i == nil {
 				return false
 			}
-			is := i.(*Item)
+			is := i.(*testItem)
 			return is.Value == "dbenque"
 		})
 	validateSameStore(t, members)
@@ -193,7 +192,7 @@ func allSequence(t *testing.T, members []*Member, engines []*engine.Engine) {
 	close(stop)
 }
 
-func TestEngineUsingSimplePkg(t *testing.T) {
+func TestEngine(t *testing.T) {
 	tests := []struct {
 		name          string
 		topo          string
@@ -201,7 +200,7 @@ func TestEngineUsingSimplePkg(t *testing.T) {
 		nbData        int
 		panicOnDelete bool
 		syncPeriod    time.Duration
-		scenario      func(*testing.T, []*Member, []*engine.Engine)
+		scenario      func(*testing.T, []*testMember, []*Engine)
 		dot           bool
 	}{
 		{
@@ -329,32 +328,65 @@ func TestEngineUsingSimplePkg(t *testing.T) {
 			panicOnDelete: true,
 			syncPeriod:    syncPeriod,
 			scenario:      addOnlySequence,
+			dot:           true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			members, engines := prepareTest(tt.nbMember, tt.nbData, tt.topo, tt.panicOnDelete, tt.syncPeriod)
-			tt.scenario(t, members, engines)
+
+			run := func() {
+				defer func() {
+					if r := recover(); r != nil {
+						t.Fatalf("A panic was detected (a delete while panicOnDelete=true?) in test %s", tt.name)
+					}
+				}()
+				tt.scenario(t, members, engines)
+			}
+
+			run()
 			if tt.dot {
-				fmt.Println(ToDot(members, os.TempDir()+tt.name))
+				fmt.Println(utils.ToDot(buildConnectionMap(members), os.TempDir()+tt.name, dotCustomizer))
 			}
 		})
 	}
 }
 
-func TestEngine(t *testing.T) {
+func dotCustomizer(m utils.VertexWithID) string {
+	mm := m.(*vertex)
+	if mm == nil {
+		return ""
+	}
+	store := mm.GetStore().(*MapStore)
+	if store == nil {
+		return ""
+	}
 
+	return fmt.Sprintf("[label=\"%v: %d\"]", mm.id, store.Count())
+}
+
+func buildConnectionMap(members []*testMember) map[utils.VertexWithID][]utils.VertexWithID {
+	result := map[utils.VertexWithID][]utils.VertexWithID{}
+	for _, p := range members {
+		connected := []utils.VertexWithID{}
+		for _, m := range p.connector.(*ConnectorImpl).ConnectorCore.(*testConnector).remoteMember {
+			connected = append(connected, &vertex{m})
+		}
+		v := &vertex{p}
+		result[v] = connected
+	}
+	return result
 }
 
 func TestFuzzyAddOnly(t *testing.T) {
 	N := r1.Intn(30) + 10
-	members := make([]*Member, N)
-	engines := make([]*engine.Engine, N)
+	members := make([]*testMember, N)
+	engines := make([]*Engine, N)
 
 	for i := range members {
-		members[i] = NewMember(fmt.Sprintf("M%d", i), store.NewMapStore())
-		engines[i] = engine.NewEngine(members[i], syncPeriod)
-		members[i].GetStore().(*store.MapStore).PanicOnDelete()
+		members[i] = newTestMember(fmt.Sprintf("M%d", i), NewMapStore())
+		engines[i] = NewEngine(members[i], syncPeriod)
+		members[i].GetStore().(*MapStore).PanicOnDelete()
 	}
 
 	//fuzzy mesh
@@ -377,16 +409,16 @@ func TestFuzzyAddOnly(t *testing.T) {
 		D := r1.Intn(20) + 1
 		allData += D
 		for d := 0; d < D; d++ {
-			name := engine.Key(names[d])
+			name := Key(names[d])
 			val := fmt.Sprintf("%d", r1.Intn(1000))
-			members[i].Write(NewItem(name, val))
+			members[i].Write(newTestItem(name, val))
 		}
 		go engines[i].Run(stop)
 	}
 
 	var wg sync.WaitGroup
 	for i := range members {
-		members[i].GetStore().(*store.MapStore).UntilCount(&wg, allData, syncPeriod)
+		members[i].GetStore().(*MapStore).UntilCount(&wg, allData, syncPeriod)
 	}
 	wg.Wait()
 	close(stop)
@@ -394,22 +426,35 @@ func TestFuzzyAddOnly(t *testing.T) {
 	validateSameStore(t, members)
 }
 
-func validateSameStore(t *testing.T, members []*Member) (ok bool) {
+type vertex struct {
+	*testMember
+}
+
+func (v *vertex) ID() string {
+	return string(v.testMember.ID())
+}
+func validateSameStore(t *testing.T, members []*testMember) (ok bool) {
 	for i := range members {
 		for j := range members {
-			storeI := members[i].GetStore().(*store.MapStore)
-			storeJ := members[j].GetStore().(*store.MapStore)
+			storeI := members[i].GetStore().(*MapStore)
+			storeJ := members[j].GetStore().(*MapStore)
 
 			di := storeI.Dump()
 			dj := storeJ.Dump()
 
 			if di != dj {
+
+				vertexes := []utils.VertexWithID{}
+				for _, v := range members {
+					vertexes = append(vertexes, &vertex{v})
+				}
+
 				t.Fatalf("Boum:\n%d in %s\n%d in %s\ntopo: %s\n",
 					storeI.Count(),
 					toTmpFile(t, "fuzzi", []byte(di)),
 					storeJ.Count(),
 					toTmpFile(t, "fuzzj", []byte(dj)),
-					ToDot(members, os.TempDir()+"/members"))
+					utils.ToDot(buildConnectionMap(members), os.TempDir()+"/members", dotCustomizer))
 				return false
 			}
 		}

@@ -1,22 +1,23 @@
-package simple
+package utils
 
 import (
 	"fmt"
 	"io/ioutil"
 	"os/exec"
 	"strings"
-
-	"github.com/dbenque/datafan/pkg/engine"
-	"github.com/dbenque/datafan/pkg/store"
 )
 
 type edge struct {
-	P1 *Member
-	P2 *Member
+	P1 VertexWithID
+	P2 VertexWithID
 }
 
-func NewEdge(p1, p2 *Member) edge {
-	if strings.Compare(string(p1.id), string(p2.id)) > 0 {
+type VertexWithID interface {
+	ID() string
+}
+
+func NewEdge(p1, p2 VertexWithID) edge {
+	if strings.Compare(string(p1.ID()), string(p2.ID())) > 0 {
 		p1, p2 = p2, p1
 	}
 	e := edge{P1: p1, P2: p2}
@@ -24,15 +25,17 @@ func NewEdge(p1, p2 *Member) edge {
 }
 
 func (e *edge) Key() string {
-	return fmt.Sprintf("%v-%v", e.P1.id, e.P2.id)
+	return fmt.Sprintf("%v-%v", e.P1.ID(), e.P2.ID())
 }
 
-func ToDot(members []*Member, filepath string) string {
+type DotCustomizerFunc func(VertexWithID) string
+
+func ToDot(membersconnections map[VertexWithID][]VertexWithID, filepath string, customizer DotCustomizerFunc) string {
 
 	links := map[string]edge{}
-	for _, p := range members {
-		for _, n := range p.connector.(*engine.ConnectorImpl).ConnectorCore.(*Connector).remoteMember {
-			e := NewEdge(p, n)
+	for m, connected := range membersconnections {
+		for _, n := range connected {
+			e := NewEdge(m, n)
 			k := e.Key()
 			if _, ok := links[k]; !ok {
 				links[k] = e
@@ -42,18 +45,17 @@ func ToDot(members []*Member, filepath string) string {
 
 	str := "Graph G {\nrankdir=LR;\n"
 
-	for _, p := range members {
+	for p := range membersconnections {
 
-		store := p.GetStore().(*store.MapStore)
-		if store != nil {
-			str += fmt.Sprintf("\"%v\" [label=\"%v: %d\"]\n", p.id, p.id, store.Count())
+		if customizer != nil {
+			str += fmt.Sprintf("\"%v\" %v\n", p.ID(), customizer(p))
 		} else {
-			str += fmt.Sprintf("\"%v\"\n", p.id)
+			str += fmt.Sprintf("\"%v\"\n", p.ID())
 		}
 	}
 
 	for _, e := range links {
-		str += fmt.Sprintf("\"%v\" -- \"%v\"\n", e.P1.id, e.P2.id)
+		str += fmt.Sprintf("\"%v\" -- \"%v\"\n", e.P1.ID(), e.P2.ID())
 	}
 	str += "}\n"
 
