@@ -1,4 +1,4 @@
-package engine
+package store
 
 import (
 	"encoding/json"
@@ -6,58 +6,60 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/dbenque/datafan/pkg/api"
 )
 
-type Store interface {
-	GetMembers() []ID
-	GetIndex(id ID) Index
-	Delete(KeyIDPair)
-	Set(Item)
-	MultiSet(Items)
-	MultiDelete(KeyIDPairs)
-	Get(KeyIDPair) Item
+type Interface interface {
+	GetMembers() []api.ID
+	GetIndex(id api.ID) api.Index
+	Delete(api.KeyIDPair)
+	Set(api.Item)
+	MultiSet(api.Items)
+	MultiDelete(api.KeyIDPairs)
+	Get(api.KeyIDPair) api.Item
 }
 
 type MapStore struct {
 	sync.RWMutex
-	internal      map[ID]map[Key]Item
+	internal      map[api.ID]map[api.Key]api.Item
 	panicOnDelete bool // for test purposes
 }
 
-var _ Store = &MapStore{}
+var _ Interface = &MapStore{}
 
 func NewMapStore() *MapStore {
 	return &MapStore{
-		internal: map[ID]map[Key]Item{},
+		internal: map[api.ID]map[api.Key]api.Item{},
 	}
 }
 func (m *MapStore) PanicOnDelete() {
 	m.panicOnDelete = true
 }
 
-func (m *MapStore) GetMembers() []ID {
+func (m *MapStore) GetMembers() []api.ID {
 	m.RLock()
 	defer m.RUnlock()
-	members := []ID{}
+	members := []api.ID{}
 	for id := range m.internal {
 		members = append(members, id)
 	}
 	return members
 }
-func (m *MapStore) GetIndex(id ID) Index {
+func (m *MapStore) GetIndex(id api.ID) api.Index {
 	m.RLock()
 	defer m.RUnlock()
 
-	index := Index{}
+	index := api.Index{}
 	if s, ok := m.internal[id]; ok {
-		index.StampedKeys = []StampedKey{}
+		index.StampedKeys = []api.StampedKey{}
 		for _, i := range s {
 			index.StampedKeys = append(index.StampedKeys, i.StampedKey())
 		}
 	}
 	return index
 }
-func (m *MapStore) MultiDelete(kps KeyIDPairs) {
+func (m *MapStore) MultiDelete(kps api.KeyIDPairs) {
 	m.Lock()
 	defer m.Unlock()
 	if m.panicOnDelete {
@@ -70,7 +72,7 @@ func (m *MapStore) MultiDelete(kps KeyIDPairs) {
 		}
 	}
 }
-func (m *MapStore) Delete(kp KeyIDPair) {
+func (m *MapStore) Delete(kp api.KeyIDPair) {
 	m.Lock()
 	defer m.Unlock()
 	if m.panicOnDelete {
@@ -80,7 +82,7 @@ func (m *MapStore) Delete(kp KeyIDPair) {
 		delete(m, kp.Key)
 	}
 }
-func (m *MapStore) MultiSet(ilist Items) {
+func (m *MapStore) MultiSet(ilist api.Items) {
 	m.Lock()
 	defer m.Unlock()
 	for _, i := range ilist {
@@ -88,25 +90,25 @@ func (m *MapStore) MultiSet(ilist Items) {
 		id := i.OwnedBy()
 		s, ok := m.internal[id]
 		if !ok {
-			s = map[Key]Item{}
+			s = map[api.Key]api.Item{}
 			m.internal[id] = s
 		}
 		s[i.GetKey()] = i.DeepCopy()
 	}
 }
 
-func (m *MapStore) Set(i Item) {
+func (m *MapStore) Set(i api.Item) {
 	m.Lock()
 	defer m.Unlock()
 	id := i.OwnedBy()
 	s, ok := m.internal[id]
 	if !ok {
-		s = map[Key]Item{}
+		s = map[api.Key]api.Item{}
 		m.internal[id] = s
 	}
 	s[i.GetKey()] = i.DeepCopy()
 }
-func (m *MapStore) Get(kp KeyIDPair) Item {
+func (m *MapStore) Get(kp api.KeyIDPair) api.Item {
 	m.RLock()
 	defer m.RUnlock()
 	if s, ok := m.internal[kp.ID]; ok {
@@ -162,7 +164,7 @@ func (m *MapStore) UntilCount(wg *sync.WaitGroup, count int, checkPeriod time.Du
 }
 
 //UntilCount for test purposes only
-func (m *MapStore) UntilCheck(wg *sync.WaitGroup, kp KeyIDPair, check func(i Item) bool, checkPeriod time.Duration, timeout time.Duration) {
+func (m *MapStore) UntilCheck(wg *sync.WaitGroup, kp api.KeyIDPair, check func(i api.Item) bool, checkPeriod time.Duration, timeout time.Duration) {
 	m.RLock()
 	defer m.RUnlock()
 	wg.Add(1)

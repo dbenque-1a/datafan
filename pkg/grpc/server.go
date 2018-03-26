@@ -1,53 +1,101 @@
 package grpc
 
 import (
+	"context"
+	"fmt"
+
+	"github.com/dbenque/datafan/pkg/api"
 	"github.com/dbenque/datafan/pkg/engine"
+	"github.com/dbenque/datafan/pkg/grpc/model"
 	"github.com/dbenque/datafan/pkg/store"
+	google_protobuf1 "github.com/golang/protobuf/ptypes/empty"
+	"google.golang.org/grpc"
 )
 
 const (
 	port = ":41120"
 )
 
-type server struct {
-	id      string
-	storage store.Store
+type Server struct {
+	id        string
+	storage   store.Interface
+	connector api.Connector
+	addr      string
 }
 
-var _ engine.LocalMember = &server{}
+var _ api.LocalMember = &Server{}
 
-func (s *server) ID() engine.ID {
-	return engine.ID(s.id)
+func NewServer(id string, publicAddress string, storage store.Interface) *Server {
+	m := &Server{id: id, storage: storage, addr: publicAddress}
+	m.connector = engine.NewConnector(m, newConnector)
+	return m
 }
 
-func (s *server) GetIndexes() engine.IndexMap {
-	return engine.IndexMap{}
+func (s *Server) ID() api.ID {
+	return api.ID(s.id)
 }
-func (s *server) GetData(engine.KeyIDPairs) engine.Items {
-	return engine.Items{}
+
+func (s *Server) GetIndexes() api.IndexMap {
+	im := api.IndexMap{
+		Source:  s.ID(),
+		Indexes: map[api.ID]api.Index{},
+	}
+	for _, id := range s.storage.GetMembers() {
+		im.Indexes[id] = s.storage.GetIndex(id)
+	}
+	return im
 }
-func (s *server) Delete(kp engine.KeyIDPairs) {
-	s.storage.MultiDelete(kp)
+func (s *Server) GetData(kps api.KeyIDPairs) api.Items {
+	items := api.Items{}
+	for _, kp := range kps {
+		i := s.storage.Get(kp)
+		if i == nil {
+			continue
+		}
+		items = append(items, i)
+	}
+	return items
 }
-func (s *server) Put(items engine.Items) {
+func (s *Server) Delete(kps api.KeyIDPairs) {
+	s.storage.MultiDelete(kps)
+}
+func (s *Server) Put(items api.Items) {
 	s.storage.MultiSet(items)
 }
-func (s *server) GetConnector() engine.Connector {
-	return nil
+func (s *Server) GetConnector() api.Connector {
+	return s.connector
 }
 
-// func main() {
+func (s *Server) BackConnect(ctx context.Context, in *model.Server) (*google_protobuf1.Empty, error) {
+	r := RemoteServer{Server: *in}
+	fmt.Printf("BACKCONNECT in: %v\n", *in)
+	if err := s.connector.Core().(*connector).RegisterAndDial(&r); err != nil {
+		fmt.Printf("BACKCONNECT Error: %v", err)
+		return nil, err
+	}
+	return nil, nil
+}
 
-// 	lis, err := net.Listen("tcp", port)
-// 	if err != nil {
-// 		log.Fatalf("failed to listen: %v", err)
-// 	}
-// 	s := grpc.NewServer()
-// 	model.RegisterIndexMapCollectorServer(s, &collector{})
-// 	model.RegisterDataRequestServer(s, &dataRequestor{})
-// 	// Register reflection service on gRPC server.
-// 	reflection.Register(s)
-// 	if err := s.Serve(lis); err != nil {
-// 		log.Fatalf("failed to serve: %v", err)
-// 	}
-// }
+func (s *Server) Who(context.Context, *google_protobuf1.Empty) (*model.Server, error) {
+	fmt.Println("WHO")
+	return &model.Server{
+		Id:      s.id,
+		Address: s.addr,
+	}, nil
+}
+
+func (s *Server) GetRemotes() []string {
+	return s.connector.Core().(*connector).GetRemotes()
+}
+
+// RemoteServer definition
+type RemoteServer struct {
+	model.Server
+	conn *grpc.ClientConn
+}
+
+var _ api.Member = &RemoteServer{}
+
+func (r *RemoteServer) ID() api.ID {
+	return api.ID(r.Id)
+}

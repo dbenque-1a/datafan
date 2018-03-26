@@ -5,6 +5,16 @@ package model;
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
 
+message Server {
+    string id = 1;
+    string address = 2;
+}
+
+service Connector {
+    rpc Who(google.protobuf.Empty) returns (Server);
+    rpc BackConnect(Server) returns (google.protobuf.Empty);
+}
+
 message Item {
     bytes data = 1;
     string key = 2;

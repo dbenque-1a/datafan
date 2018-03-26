@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dbenque/datafan/pkg/api"
+	"github.com/dbenque/datafan/pkg/store"
 	"github.com/dbenque/datafan/pkg/utils"
 )
 
@@ -42,15 +44,15 @@ func runEngines(stop chan struct{}, engines []*Engine) {
 func waitForCount(count int, members []*testMember, checkPeriod time.Duration, timeout time.Duration) {
 	var wg sync.WaitGroup
 	for i := 0; i < len(members); i++ {
-		s := members[i].GetStore().(*MapStore)
+		s := members[i].GetStore().(*store.MapStore)
 		s.UntilCount(&wg, count, checkPeriod, timeout)
 	}
 	wg.Wait()
 }
-func waitForCheck(members []*testMember, checkPeriod time.Duration, kp KeyIDPair, check func(i Item) bool, timeout time.Duration) {
+func waitForCheck(members []*testMember, checkPeriod time.Duration, kp api.KeyIDPair, check func(i api.Item) bool, timeout time.Duration) {
 	var wg sync.WaitGroup
 	for i := 0; i < len(members); i++ {
-		s := members[i].GetStore().(*MapStore)
+		s := members[i].GetStore().(*store.MapStore)
 		s.UntilCheck(&wg, kp, check, checkPeriod, timeout)
 	}
 	wg.Wait()
@@ -61,10 +63,10 @@ func prepareTest(N int, D int, meshType string, panicOnDelete bool, syncPeriod t
 	engines := make([]*Engine, N)
 
 	for i := range members {
-		members[i] = newTestMember(fmt.Sprintf("M%d", i), NewMapStore())
+		members[i] = newTestMember(fmt.Sprintf("M%d", i), store.NewMapStore())
 		engines[i] = NewEngine(members[i], syncPeriod)
 		if panicOnDelete {
-			members[i].GetStore().(*MapStore).PanicOnDelete()
+			members[i].GetStore().(*store.MapStore).PanicOnDelete()
 		}
 	}
 
@@ -138,7 +140,7 @@ func prepareTest(N int, D int, meshType string, panicOnDelete bool, syncPeriod t
 
 	for i := range members {
 		for d := 0; d < D; d++ {
-			name := Key(names[d])
+			name := api.Key(names[d])
 			val := fmt.Sprintf("%d", r1.Intn(1000))
 			members[i].Write(newTestItem(name, val))
 		}
@@ -156,8 +158,8 @@ func addOnlySequence(t *testing.T, members []*testMember, engines []*Engine) {
 	waitForCount(DD*NN+1, members, checkPeriod, 2*time.Second)
 	validateSameStore(t, members)
 	members[0].Write(newTestItem("David", "dbenque"))
-	waitForCheck(members, checkPeriod, KeyIDPair{Key: "David", ID: members[0].id},
-		func(i Item) bool {
+	waitForCheck(members, checkPeriod, api.KeyIDPair{Key: "David", ID: members[0].id},
+		func(i api.Item) bool {
 			if i == nil {
 				return false
 			}
@@ -177,8 +179,8 @@ func allSequence(t *testing.T, members []*testMember, engines []*Engine) {
 	waitForCount(DD*NN+1, members, checkPeriod, 2*time.Second)
 	validateSameStore(t, members)
 	members[0].Write(newTestItem("David", "dbenque"))
-	waitForCheck(members, checkPeriod, KeyIDPair{Key: "David", ID: members[0].id},
-		func(i Item) bool {
+	waitForCheck(members, checkPeriod, api.KeyIDPair{Key: "David", ID: members[0].id},
+		func(i api.Item) bool {
 			if i == nil {
 				return false
 			}
@@ -355,7 +357,7 @@ func dotCustomizer(m utils.VertexWithID) string {
 	if mm == nil {
 		return ""
 	}
-	store := mm.GetStore().(*MapStore)
+	store := mm.GetStore().(*store.MapStore)
 	if store == nil {
 		return ""
 	}
@@ -382,9 +384,9 @@ func TestFuzzyAddOnly(t *testing.T) {
 	engines := make([]*Engine, N)
 
 	for i := range members {
-		members[i] = newTestMember(fmt.Sprintf("M%d", i), NewMapStore())
+		members[i] = newTestMember(fmt.Sprintf("M%d", i), store.NewMapStore())
 		engines[i] = NewEngine(members[i], syncPeriod)
-		members[i].GetStore().(*MapStore).PanicOnDelete()
+		members[i].GetStore().(*store.MapStore).PanicOnDelete()
 	}
 
 	//fuzzy mesh
@@ -407,7 +409,7 @@ func TestFuzzyAddOnly(t *testing.T) {
 		D := r1.Intn(20) + 1
 		allData += D
 		for d := 0; d < D; d++ {
-			name := Key(names[d])
+			name := api.Key(names[d])
 			val := fmt.Sprintf("%d", r1.Intn(1000))
 			members[i].Write(newTestItem(name, val))
 		}
@@ -416,7 +418,7 @@ func TestFuzzyAddOnly(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for i := range members {
-		members[i].GetStore().(*MapStore).UntilCount(&wg, allData, syncPeriod, 40*time.Second)
+		members[i].GetStore().(*store.MapStore).UntilCount(&wg, allData, syncPeriod, 40*time.Second)
 	}
 	wg.Wait()
 	close(stop)
@@ -434,8 +436,8 @@ func (v *vertex) ID() string {
 func validateSameStore(t *testing.T, members []*testMember) (ok bool) {
 	for i := range members {
 		for j := range members {
-			storeI := members[i].GetStore().(*MapStore)
-			storeJ := members[j].GetStore().(*MapStore)
+			storeI := members[i].GetStore().(*store.MapStore)
+			storeJ := members[j].GetStore().(*store.MapStore)
 
 			di := storeI.Dump()
 			dj := storeJ.Dump()

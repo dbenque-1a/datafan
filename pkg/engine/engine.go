@@ -4,39 +4,41 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/dbenque/datafan/pkg/api"
 )
 
 type Engine struct {
-	local                LocalMember
-	connector            Connector
+	local                api.LocalMember
+	connector            api.Connector
 	indexTimeCacheMutext sync.RWMutex
-	indexTimeCache       map[ID]time.Time
-	lastLocalKeys        []StampedKey
+	indexTimeCache       map[api.ID]time.Time
+	lastLocalKeys        []api.StampedKey
 	syncPeriod           time.Duration
 }
 
-func (e *Engine) updateIndexTime(id ID, time time.Time) {
+func (e *Engine) updateIndexTime(id api.ID, time time.Time) {
 	e.indexTimeCacheMutext.Lock()
 	defer e.indexTimeCacheMutext.Unlock()
 	e.indexTimeCache[id] = time
 }
-func (e *Engine) getIndexTime(id ID) (time.Time, bool) {
+func (e *Engine) getIndexTime(id api.ID) (time.Time, bool) {
 	e.indexTimeCacheMutext.RLock()
 	defer e.indexTimeCacheMutext.RUnlock()
 	t, ok := e.indexTimeCache[id]
 	return t, ok
 }
 
-func NewEngine(local LocalMember, syncPeriod time.Duration) *Engine {
+func NewEngine(local api.LocalMember, syncPeriod time.Duration) *Engine {
 	return &Engine{
 		local:          local,
-		indexTimeCache: map[ID]time.Time{},
+		indexTimeCache: map[api.ID]time.Time{},
 		connector:      local.GetConnector(),
 		syncPeriod:     syncPeriod,
 	}
 }
 
-func (e *Engine) AddMember(p Member) {
+func (e *Engine) AddMember(p api.Member) {
 	e.connector.Connect(p)
 }
 
@@ -120,16 +122,16 @@ func (e *Engine) Run(stop <-chan struct{}) {
 }
 
 type keyPair struct {
-	current *StampedKey
-	update  *StampedKey
+	current *api.StampedKey
+	update  *api.StampedKey
 }
 
-func (e *Engine) GetLocalMember() Member {
+func (e *Engine) GetLocalMember() api.Member {
 	return e.local
 }
 
-func (e *Engine) CheckAndGetUpdates(indexMap IndexMap) {
-	membersID := map[ID]struct{}{}
+func (e *Engine) CheckAndGetUpdates(indexMap api.IndexMap) {
+	membersID := map[api.ID]struct{}{}
 	currentIndexes := e.local.GetIndexes().Indexes
 	updateIndexes := indexMap.Indexes
 	for id := range updateIndexes {
@@ -142,8 +144,8 @@ func (e *Engine) CheckAndGetUpdates(indexMap IndexMap) {
 	for id := range membersID {
 		currentIndex, ok := currentIndexes[id]
 		if !ok {
-			currentIndex = Index{
-				StampedKeys: []StampedKey{},
+			currentIndex = api.Index{
+				StampedKeys: []api.StampedKey{},
 			}
 		}
 		updateIndex, ok2 := updateIndexes[id]
@@ -158,7 +160,7 @@ func (e *Engine) CheckAndGetUpdates(indexMap IndexMap) {
 		}
 
 		//index all keys and pair them
-		allKeys := map[Key]keyPair{}
+		allKeys := map[api.Key]keyPair{}
 		for i, k := range currentIndex.StampedKeys {
 			allKeys[k.Key] = keyPair{current: &currentIndex.StampedKeys[i]}
 		}
@@ -171,26 +173,26 @@ func (e *Engine) CheckAndGetUpdates(indexMap IndexMap) {
 			}
 			allKeys[k.Key] = kp
 		}
-		toFetch := KeyIDPairs{}
-		toDelete := KeyIDPairs{}
+		toFetch := api.KeyIDPairs{}
+		toDelete := api.KeyIDPairs{}
 
 		//compare key version
 		for k, kp := range allKeys {
 			if kp.current == nil {
-				toFetch = append(toFetch, KeyIDPair{ID: id, Key: k})
+				toFetch = append(toFetch, api.KeyIDPair{ID: id, Key: k})
 				continue
 			}
 			if kp.update == nil {
-				toDelete = append(toDelete, KeyIDPair{ID: id, Key: k})
+				toDelete = append(toDelete, api.KeyIDPair{ID: id, Key: k})
 				continue
 			}
 			if kp.update.Timestamp.After(kp.current.Timestamp) {
-				toFetch = append(toFetch, KeyIDPair{ID: id, Key: k})
+				toFetch = append(toFetch, api.KeyIDPair{ID: id, Key: k})
 				continue
 			}
 		}
 		if len(toFetch) > 0 {
-			e.connector.RequestKeysChan() <- DataRequest{KeyIDPairs: toFetch, RequestDestination: indexMap.Source, RequestSource: e.local.ID(), AssociatedBuildTime: map[ID]time.Time{id: updateIndex.BuildTime}}
+			e.connector.RequestKeysChan() <- api.DataRequest{KeyIDPairs: toFetch, RequestDestination: indexMap.Source, RequestSource: e.local.ID(), AssociatedBuildTime: map[api.ID]time.Time{id: updateIndex.BuildTime}}
 		}
 		if len(toDelete) > 0 {
 			e.local.Delete(toDelete)

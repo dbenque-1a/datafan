@@ -1,4 +1,4 @@
-package engine
+package api
 
 import (
 	"strings"
@@ -70,13 +70,11 @@ type IndexMap struct {
 
 type Member interface {
 	ID() ID
-	GetIndexes() IndexMap
-	GetData(KeyIDPairs) Items
 }
 
 type ConnectorCore interface {
 	GetLocalMember() LocalMember
-	Connect(Member)
+	Connect(Member) error
 	ForwardDataRequest(rq DataRequest)
 	ProcessDataRequest(rq DataRequest)
 	ProcessIndexMap(index IndexMap)
@@ -91,6 +89,7 @@ type Connector interface {
 	ConnectorChan
 	ConnectorCore
 	Run(stop <-chan struct{})
+	Core() ConnectorCore
 }
 
 type LocalMember interface {
@@ -98,6 +97,8 @@ type LocalMember interface {
 	Delete(KeyIDPairs)
 	Put(Items)
 	GetConnector() Connector
+	GetIndexes() IndexMap
+	GetData(KeyIDPairs) Items
 }
 
 type Items []Item
