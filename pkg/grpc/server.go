@@ -1,14 +1,10 @@
 package grpc
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/dbenque/datafan/pkg/api"
 	"github.com/dbenque/datafan/pkg/engine"
 	"github.com/dbenque/datafan/pkg/grpc/model"
 	"github.com/dbenque/datafan/pkg/store"
-	google_protobuf1 "github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc"
 )
 
@@ -66,26 +62,12 @@ func (s *Server) GetConnector() api.Connector {
 	return s.connector
 }
 
-func (s *Server) BackConnect(ctx context.Context, in *model.Server) (*google_protobuf1.Empty, error) {
-	r := RemoteServer{Server: *in}
-	fmt.Printf("BACKCONNECT in: %v\n", *in)
-	if err := s.connector.Core().(*connector).RegisterAndDial(&r); err != nil {
-		fmt.Printf("BACKCONNECT Error: %v", err)
-		return nil, err
-	}
-	return nil, nil
-}
-
-func (s *Server) Who(context.Context, *google_protobuf1.Empty) (*model.Server, error) {
-	fmt.Println("WHO")
-	return &model.Server{
-		Id:      s.id,
-		Address: s.addr,
-	}, nil
-}
-
 func (s *Server) GetRemotes() []string {
-	return s.connector.Core().(*connector).GetRemotes()
+	return s.connector.Core().(*Connector).GetRemotes()
+}
+
+func (s *Server) DumpStore() string {
+	return s.storage.(*store.MapStore).Dump()
 }
 
 // RemoteServer definition

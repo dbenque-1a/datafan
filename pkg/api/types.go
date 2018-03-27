@@ -77,13 +77,15 @@ type ConnectorCore interface {
 	Connect(Member) error
 	ForwardDataRequest(rq DataRequest)
 	ProcessDataRequest(rq DataRequest)
-	ProcessIndexMap(index IndexMap)
+	FanOutIndexMap(index IndexMap) //TODO maybe pass a pointer to avoid copy
 }
 type ConnectorChan interface {
+	ReceiveIndexMap(in *IndexMap)
 	ReceiveIndexChan() <-chan IndexMap
+	ReceiveData(in *DataResponse)
+	ReceiveDataChan() <-chan DataResponse
 	SendIndexChan() chan<- IndexMap
 	RequestKeysChan() chan<- DataRequest
-	ReceiveDataChan() <-chan DataResponse
 }
 type Connector interface {
 	ConnectorChan

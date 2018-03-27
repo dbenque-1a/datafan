@@ -42,7 +42,7 @@ message StampedKey {
 
 message Index {
     google.protobuf.Timestamp buildTime = 1;
-    repeated StampedKey stamptedKeys = 2;
+    repeated StampedKey stampedKeys = 2;
 }
 
 message IndexMap {
@@ -54,6 +54,10 @@ service IndexMapCollector {
     rpc CollectIndexMap (IndexMap) returns (google.protobuf.Empty);
 }
 
+message DataResponse {
+    map<string,google.protobuf.Timestamp> associatedBuildTime = 1;
+    Items items = 2;
+}
 service DataRequest {
-    rpc GetData(KeyIDPairs) returns (Items);
+    rpc GetData(KeyIDPairs) returns (DataResponse);
 }

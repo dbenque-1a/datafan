@@ -1,6 +1,8 @@
 package engine
 
-import "github.com/dbenque/datafan/pkg/api"
+import (
+	"github.com/dbenque/datafan/pkg/api"
+)
 
 type ConnectorImpl struct {
 	api.ConnectorCore
@@ -30,6 +32,10 @@ func (c *ConnectorImpl) Core() api.ConnectorCore {
 	return c.ConnectorCore
 }
 
+func (c *ConnectorImpl) ReceiveIndexMap(in *api.IndexMap) {
+	c.ReceiveIndexCh <- *in
+}
+
 func (c *ConnectorImpl) ReceiveIndexChan() <-chan api.IndexMap {
 	return c.ReceiveIndexCh
 }
@@ -40,6 +46,9 @@ func (c *ConnectorImpl) SendIndexChan() chan<- api.IndexMap {
 func (c *ConnectorImpl) RequestKeysChan() chan<- api.DataRequest {
 	return c.RequestKeysCh
 }
+func (c *ConnectorImpl) ReceiveData(in *api.DataResponse) {
+	c.ReceiveDataCh <- *in
+}
 func (c *ConnectorImpl) ReceiveDataChan() <-chan api.DataResponse {
 	return c.ReceiveDataCh
 }
@@ -48,7 +57,7 @@ func (c *ConnectorImpl) Run(stop <-chan struct{}) {
 	for {
 		select {
 		case indexFromChan := <-c.sendIndexCh: // fan out to remote
-			go c.ProcessIndexMap(indexFromChan)
+			go c.FanOutIndexMap(indexFromChan)
 		case rqFromChan := <-c.RequestKeysCh:
 			if rqFromChan.RequestDestination == c.GetLocalMember().ID() {
 				// handle the request (only for non RPC context. In RPC context the remote server take care of that)

@@ -163,7 +163,7 @@ func (c *testConnector) connect(m api.Member, twoWays bool) error {
 	return nil
 }
 
-func (c *testConnector) ProcessIndexMap(index api.IndexMap) {
+func (c *testConnector) FanOutIndexMap(index api.IndexMap) {
 	c.remoteHandling.RLock()
 	defer c.remoteHandling.RUnlock()
 	for _, m := range c.remoteMember {
